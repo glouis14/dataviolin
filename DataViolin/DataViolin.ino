@@ -116,6 +116,7 @@ long incPWM [NUM_CHAN];
 long ticksPWM [NUM_CHAN];
 long delayPWM [NUM_CHAN];
 bool fretDownFlags [NUM_CHAN];
+int fretBowCompensation [NUM_CHAN];
 
 int latest_note_ID;
 
@@ -192,17 +193,7 @@ void setup() {
 	updatePWM ();
 	
 	initArticulation ();
-//	Serial.println (motorSpeed_L.min);
-//	motorSpeed_L.min = 88;
-//	Serial.println (motorSpeed_L.min);
-//	writeParamToEEPROM ();
-//	Serial.println (motorSpeed_L.min);	
 	readParamFromEEPROM ();
-//	Serial.println (motorSpeed_L.min);
-//	for (i=0; i<100; i++) {
-//		byte b = EEPROM.read (i);
-//		Serial.println (b);		
-//	}
 	
 	// interrupts
 	FlexiTimer2::set (TIME_GRAN, 1.0/1000, tick); // call every 10ms (10x 1ms)
@@ -371,7 +362,8 @@ int last_played_note_R;
 
 void PlayNote (int ID, int velocity) {
 	if ((ID != L_OPEN) && (ID != R_OPEN)) {
-		linePWM (ID, (MAX_PWM_LINE * fretPressure.c) / 127, noteOnFretAttack.c, noteOnFretDelay.c);		
+		linePWM (ID, (MAX_PWM_LINE * fretPressure.c) / 127, noteOnFretAttack.c, noteOnFretDelay.c);
+		//			  16 bit         7 bit
 	}
 		
 	fretDownFlags [ID] = true;
@@ -383,7 +375,10 @@ void PlayNote (int ID, int velocity) {
 			// if a note is already playing we don't have to push down the bow again (aka legato)
 		}
 		else {
-			linePWM (L_BOW, (MAX_PWM_LINE * bowPressure_L.c) / 127, noteOnBowAttack.c, noteOnBowDelay.c);
+		//	linePWM (L_BOW, (MAX_PWM_LINE * bowPressure_L.c) / 127, noteOnBowAttack.c, noteOnBowDelay.c);
+			linePWM (L_BOW, (MAX_PWM_LINE * bowPressure_L.c * fretBowCompensation [ID]) / 8001, noteOnBowAttack.c, noteOnBowDelay.c);
+			//               16 bit         7 bit             7 bit = 30 bit              127*63 (13 bit)
+		
 			linePWM (L_MOTOR, (MAX_PWM_LINE * motorSpeed_L.c) / 127, noteOnMotorAttack.c, noteOnMotorDelay.c);
 		}
 		note_playing_flag_L = true;
@@ -394,7 +389,9 @@ void PlayNote (int ID, int velocity) {
 		if (note_playing_flag_R) {
 		}
 		else {
-			linePWM (R_BOW, (MAX_PWM_LINE * bowPressure_R.c) / 127, noteOnBowAttack.c, noteOnBowDelay.c);
+		//	linePWM (R_BOW, (MAX_PWM_LINE * bowPressure_R.c) / 127, noteOnBowAttack.c, noteOnBowDelay.c);
+			linePWM (R_BOW, (MAX_PWM_LINE * bowPressure_R.c * fretBowCompensation [ID]) / 8001, noteOnBowAttack.c, noteOnBowDelay.c);
+
 			linePWM (R_MOTOR, (MAX_PWM_LINE * motorSpeed_R.c) / 127, noteOnMotorAttack.c, noteOnMotorDelay.c);
 		}
 		note_playing_flag_R = true;
@@ -669,6 +666,8 @@ void OnSysex () {
 // END MIDI ===============================================================
 
 void initArticulation () {
+	int i;
+	
 	initStruct (&noteOnFretDelay, 0);
 	initStruct (&noteOnBowDelay, 0);
 	initStruct (&noteOnMotorDelay, 0);
@@ -688,6 +687,14 @@ void initArticulation () {
 	initStruct (&noteOffFretRelease, 0);
 	initStruct (&noteOffBowRelease, 0);
 	initStruct (&noteOffMotorRelease, 0);
+	
+	// could set all to 127, but this better illustrates which values matter
+	for (i=L_FRET_1; i<=L_FRET_12; i++) {
+		fretBowCompensation [i] = 63;	// not 127 - we want to be able to increase!
+	}
+	for (i=R_FRET_1; i<=R_FRET_12; i++) {
+		fretBowCompensation [i] = 63;
+	}
 }
 
 void RandomizeArticulationOn () {
@@ -1098,6 +1105,11 @@ void readParamFromEEPROM () {
 	noteOffFretRelease.max		= mergeEEPROMbytes (66);
 	noteOffBowRelease.max		= mergeEEPROMbytes (68);
 	noteOffMotorRelease.max		= mergeEEPROMbytes (70);
+	
+	
+	for (i=0; i<NUM_CHAN; i++) {
+		fretBowCompensation [i] = mergeEEPROMbytes (72 + i*2);		
+	}	
 }
 
 
