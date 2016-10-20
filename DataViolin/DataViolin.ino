@@ -81,7 +81,12 @@ MD_MIDIFile SMF;
 #define MIN_PWM_LINE		(MIN_PWM << LINE_SCALE)
 #define MAX_PWM_LINE		(MAX_PWM << LINE_SCALE)
 
-
+typedef struct {
+	long	c;		// current
+	long	min;
+	long	max;
+} t_valRange;
+	
 int	err;
 int pgm, tru, trl, pot;
 int speed = 100;
@@ -96,6 +101,9 @@ long ticksPWM [NUM_CHAN];
 long delayPWM [NUM_CHAN];
 
 int latest_note_ID;
+
+bool ignoreChannelFlag = true;
+bool localRandomization = false;
 
 // ====================================================================================================================================
 // setup ==============================================================================================================================
@@ -321,6 +329,46 @@ int noteOffFretRelease	= 20;
 int noteOffBowRelease	= 20;
 int noteOffMotorRelease	= 20;
 
+
+int noteOnFretDelayMin		= noteOnFretDelay;
+int noteOnFretDelayMax		= noteOnFretDelay;
+int	noteOnBowDelayMin		= noteOnBowDelay;
+int	noteOnBowDelayMax		= noteOnBowDelay;
+int	noteOnMotorDelayMin		= noteOnMotorDelay;
+int	noteOnMotorDelayMax		= noteOnMotorDelay;
+int noteOffFretDelayMin		= noteOffFretDelay;
+int noteOffFretDelayMax		= noteOffFretDelay;
+int noteOffBowDelayMin		= noteOffBowDelay;
+int noteOffBowDelayMax		= noteOffBowDelay;
+int noteOffMotorDelayMin	= noteOffMotorDelay;
+int noteOffMotorDelayMax	= noteOffMotorDelay;
+
+long motorSpeedMin_L 	= motorSpeed_L;
+long motorSpeedMax_L 	= motorSpeed_L;
+long motorSpeedMin_R 	= motorSpeed_R;
+long motorSpeedMax_R 	= motorSpeed_R;
+long bowPressureMin_L 	= bowPressure_L;
+long bowPressureMax_L 	= bowPressure_L;
+long bowPressureMin_R 	= bowPressure_R;
+long bowPressureMax_R 	= bowPressure_R;
+long fretPressureMin 	= fretPressure;
+long fretPressureMax 	= fretPressure;
+
+int noteOnFretAttackMin 	= noteOnFretAttack;
+int noteOnFretAttackMax 	= noteOnFretAttack;
+int noteOnBowAttackMin		= noteOnBowAttack;
+int noteOnBowAttackMax		= noteOnBowAttack;
+int noteOnMotorAttackMin	= noteOnMotorAttack;
+int noteOnMotorAttackMax	= noteOnMotorAttack;
+int noteOffFretReleaseMin	= noteOffFretRelease;
+int noteOffFretReleaseMax	= noteOffFretRelease;
+int noteOffBowReleaseMin	= noteOffBowRelease;
+int noteOffBowReleaseMax	= noteOffBowRelease;
+int noteOffMotorReleaseMin	= noteOffMotorRelease;
+int noteOffMotorReleaseMax	= noteOffMotorRelease;
+
+
+
 bool note_playing_flag_L = false;
 bool note_playing_flag_R = false;
 int last_played_note_L;
@@ -420,107 +468,112 @@ void checkMIDI () {
 	}
 #endif
 }
-void OnNoteOn(byte channel, byte note, byte velocity) {
+void OnNoteOn (byte channel, byte note, byte velocity) {
 	int ch;
 
-	if (channel == 1) {
+	if ((channel == 1) || (ignoreChannelFlag)) {
 		if ((note >= MIDI_NOTE_OPEN_STRING_L) && (note <= MIDI_NOTE_OPEN_STRING_L + 12)) {
 			ch = note - MIDI_NOTE_OPEN_STRING_L + L_OPEN;
 		}		
 	}
-	else if (channel == 2) {
+	if ((channel == 2) || (ignoreChannelFlag)) {
 		if ((note >= MIDI_NOTE_OPEN_STRING_R) && (note <= MIDI_NOTE_OPEN_STRING_R + 12)) {
 			ch = note - MIDI_NOTE_OPEN_STRING_R + R_OPEN;
 		}		
 	}
-	else return;
- 
+
+	if (localRandomization) {
+		RandomizeArticulationOn ();
+	}
 	PlayNote (ch, 0);
 	latest_note_ID = ch;
 }
 
-void OnNoteOff(byte channel, byte note, byte velocity) {
+void OnNoteOff (byte channel, byte note, byte velocity) {
 	int ch;
 	
-	if (channel == 1) {
+	if ((channel == 1) || (ignoreChannelFlag)) {
 		if ((note >= MIDI_NOTE_OPEN_STRING_L) && (note <= MIDI_NOTE_OPEN_STRING_L + 12)) {
 			ch = note - MIDI_NOTE_OPEN_STRING_L + L_OPEN;
 		}
 	}
-	else if (channel == 2) {
+	if ((channel == 2) || (ignoreChannelFlag)) {
 		if ((note >= MIDI_NOTE_OPEN_STRING_R) && (note <= MIDI_NOTE_OPEN_STRING_R + 12)) {
 			ch = note - MIDI_NOTE_OPEN_STRING_R + R_OPEN;
 		}		
 	}
-	else return;
 	
+	if (localRandomization) {
+		RandomizeArticulationOff ();
+	}
 	StopNote (ch, 0);
 }
 
-void OnControlChange(byte channel, byte control, byte value) {
+void OnControlChange (byte channel, byte control, byte value) {
 	// calling all 16 (currently) control changes separately takes 170µs to process
 //	digitalWrite (LEDpin, HIGH);
 	
 	switch (control) {
-	case 0:
-		noteOnFretDelay = value * 10;
-		break;
-	case 1:
-		noteOnBowDelay = value * 10;
-		break;
-	case 2:
-		noteOnMotorDelay = value * 10;
-		break;
-	case 3:
-		noteOffFretDelay = value * 10;
-		break;
-	case 4:
-		noteOffBowDelay = value * 10;
-		break;
-	case 5:
-		noteOffMotorDelay = value * 10;
-		break;
+	case 0: 	noteOnFretDelay = value * 10;		break;
+	case 1:		noteOnBowDelay = value * 10;		break;
+	case 2:		noteOnMotorDelay = value * 10;		break;
+	case 3:		noteOffFretDelay = value * 10;		break;
+	case 4:		noteOffBowDelay = value * 10;		break;
+	case 5:		noteOffMotorDelay = value * 10;		break;
 		
-	case 10:
-		motorSpeed_L = value;
-		linePWM (L_MOTOR, (MAX_PWM_LINE * motorSpeed_L) / 127, 0, 0);		
-		break;
-	case 11:
-		motorSpeed_R = value;
-		linePWM (R_MOTOR, (MAX_PWM_LINE * motorSpeed_R) / 127, 0, 0);		
-		break;
-	case 12:
-		bowPressure_L = value;
-		linePWM (L_BOW, (MAX_PWM_LINE * bowPressure_L) / 127, 0, 0);		
-		break;
-	case 13:
-		bowPressure_R = value;
-		linePWM (R_BOW, (MAX_PWM_LINE * bowPressure_R) / 127, 0, 0);		
-		break;
-	case 14:
-		fretPressure = value;
-		linePWM (latest_note_ID, (MAX_PWM_LINE * fretPressure) / 127, 0, 0);		
-		break;
+	case 10:	motorSpeed_L = value;		linePWM (L_MOTOR, (MAX_PWM_LINE * motorSpeed_L) / 127, 0, 0);			break;	// don't just adjust the parameter, apply immediately
+	case 11:	motorSpeed_R = value;		linePWM (R_MOTOR, (MAX_PWM_LINE * motorSpeed_R) / 127, 0, 0);			break;
+	case 12:	bowPressure_L = value;		linePWM (L_BOW, (MAX_PWM_LINE * bowPressure_L) / 127, 0, 0);			break;
+	case 13:	bowPressure_R = value;		linePWM (R_BOW, (MAX_PWM_LINE * bowPressure_R) / 127, 0, 0);			break;
+	case 14:	fretPressure = value;		linePWM (latest_note_ID, (MAX_PWM_LINE * fretPressure) / 127, 0, 0);	break;
 
+	case 20:	noteOnFretAttack = value * 10;		break;
+	case 21:	noteOnBowAttack = value * 10;		break;
+	case 22:	noteOnMotorAttack = value * 10;		break;
+	case 23:	noteOffFretRelease = value * 10;	break;
+	case 24:	noteOffBowRelease = value * 10;		break;
+	case 25:	noteOffMotorRelease = value * 10;	break;
 		
-	case 20:
-		noteOnFretAttack = value * 10;
-		break;
-	case 21:
-		noteOnBowAttack = value * 10;
-		break;
-	case 22:
-		noteOnMotorAttack = value * 10;
-		break;
-	case 23:
-		noteOffFretRelease = value * 10;
-		break;
-	case 24:
-		noteOffBowRelease = value * 10;
-		break;
-	case 25:
-		noteOffMotorRelease = value * 10;
-		break;
+	// min/max for the above
+	case 40:	noteOnFretDelayMin = value * 10;		break;
+	case 41:	noteOnBowDelayMin = value * 10;			break;
+	case 42:	noteOnMotorDelayMin = value * 10;		break;
+	case 43:	noteOffFretDelayMin = value * 10;		break;
+	case 44:	noteOffBowDelayMin = value * 10;		break;
+	case 45:	noteOffMotorDelayMin = value * 10;		break;
+	case 50:	noteOnFretDelayMax = value * 10;		break;
+	case 51:	noteOnBowDelayMax = value * 10;			break;
+	case 52:	noteOnMotorDelayMax = value * 10;		break;
+	case 53:	noteOffFretDelayMax = value * 10;		break;
+	case 54:	noteOffBowDelayMax = value * 10;		break;
+	case 55:	noteOffMotorDelayMax = value * 10;		break;
+		
+	case 60:	motorSpeedMin_L = value;			break;
+	case 61:	motorSpeedMin_R = value;			break;
+	case 62:	bowPressureMin_L = value;			break;
+	case 63:	bowPressureMin_R = value;			break;
+	case 64:	fretPressureMin = value;			break;
+	case 70:	motorSpeedMax_L = value;			break;
+	case 71:	motorSpeedMax_R = value;			break;
+	case 72:	bowPressureMax_L = value;			break;
+	case 73:	bowPressureMax_R = value;			break;
+	case 74:	fretPressureMax = value;			break;
+
+	case 80:	noteOnFretAttackMin = value * 10;		break;
+	case 81:	noteOnBowAttackMin = value * 10;		break;
+	case 82:	noteOnMotorAttackMin = value * 10;		break;
+	case 83:	noteOffFretReleaseMin = value * 10;		break;
+	case 84:	noteOffBowReleaseMin = value * 10;		break;
+	case 85:	noteOffMotorReleaseMin = value * 10;	break;
+	case 90:	noteOnFretAttackMax = value * 10;		break;
+	case 91:	noteOnBowAttackMax = value * 10;		break;
+	case 92:	noteOnMotorAttackMax = value * 10;		break;
+	case 93:	noteOffFretReleaseMax = value * 10;		break;
+	case 94:	noteOffBowReleaseMax = value * 10;		break;
+	case 95:	noteOffMotorReleaseMax = value * 10;	break;
+		
+
+	case 127:	localRandomization = value;		break;
 	}
 	
 //	digitalWrite (LEDpin, LOW);	
@@ -555,7 +608,7 @@ void OnSysex () {
 			
 			fretPressure		= sxBuf [19];
 			
-			if (channel == 1) {
+			if ((note >= MIDI_NOTE_OPEN_STRING_L) && (note <= MIDI_NOTE_OPEN_STRING_L + 12)) {
 				motorSpeed_L	= sxBuf [17];
 				bowPressure_L	= sxBuf [18];
 			}
@@ -577,16 +630,14 @@ void OnSysex () {
 
 			OnNoteOff (channel, note, velocity);
 		}
-	}
-	
-	
-/*	for (i=0; i<channel; i++) {
-		digitalWrite (LEDpin, HIGH);
-		digitalWrite (LEDpin, LOW);
-	}	*/
+	}	
 }
 // END MIDI ===============================================================
 
+
+void RandomizeArticulationOn () {
+	
+}
 // ====================================================================================
 // MAIN LOOP - MAIN TICK
 // loop is called as fast as possible
