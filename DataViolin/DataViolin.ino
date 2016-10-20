@@ -1,39 +1,21 @@
 /*
 	DataViolin - a project by Jon Rose
 	
-	to do:
-	- more hierarchical structures for all the parameters
-	- combine ADSR concept with planned overshoot functionality
 */
 
 #include <FlexiTimer2.h>
 #include <SPI.h>
 #include <SdFat.h>
 #include <MD_MIDIFile.h>
-#include <EEPROM.h>
 
-#define DEBUG_ENABLE
 #define	USE_MIDI
-
-#ifdef DEBUG_ENABLE
 #ifdef USE_MIDI // set up for direct MIDI serial output
-#define	DEBUG(x)		SX_STRING(x)
-#define DEBUGN(x)		SX_NUM(x)
-#define DEBUGN_LN(x)	SX_NUM_LN(x)
-#define	DEBUGX(x)
-#else // don't use MIDI to allow printing debug statements
-#define	DEBUG(x)		Serial.print(x)
-#define	DEBUGN(x)		Serial.print(x)
-#define	DEBUGN_LN(x)	Serial.println(x)
-#define	DEBUGX(x)		Serial.print(x, HEX)
-#endif
-#else
 #define	DEBUG(x)
 #define	DEBUGX(x)
-#define	DEBUGN(x)
-#define	DEBUGN_LN(x)
+#else // don't use MIDI to allow printing debug statements
+#define	DEBUG(x)	Serial.print(x)
+#define	DEBUGX(x)	Serial.print(x, HEX)
 #endif
-
 
 #define		SD_SELECT_PIN  21
 bool 		SD_available = false;
@@ -49,7 +31,6 @@ MD_MIDIFile SMF;
 #define POTpin	A6
 #define TRUpin	A8
 #define TRLpin	A9
-//#define BUTpin	A14
 
 #define T_LEFT	0
 #define T_RIGHT	1
@@ -58,7 +39,6 @@ MD_MIDIFile SMF;
 
 // IDs of PWM channels controlling the solenoids and motors
 #define L_BOW			0
-#define L_OPEN			0
 #define L_FRET_1		1
 #define L_FRET_2		2
 #define L_FRET_3		3
@@ -73,7 +53,6 @@ MD_MIDIFile SMF;
 #define L_FRET_12		12
 #define L_MOTOR			13
 #define R_BOW			14
-#define R_OPEN			14
 #define R_FRET_1		15
 #define R_FRET_2		16
 #define R_FRET_3		17
@@ -100,18 +79,9 @@ MD_MIDIFile SMF;
 #define MIN_PWM_LINE		(MIN_PWM << LINE_SCALE)
 #define MAX_PWM_LINE		(MAX_PWM << LINE_SCALE)
 
-typedef struct {
-	long	c;		// current
-	long	min;
-	long	max;
-} t_valRange;
-int randomRangeStruct (t_valRange *v);
-int initStruct (t_valRange *v, long vi);
-	
+
 int	err;
 int pgm, tru, trl, pot;
-long potBow = 127;
-long potMot = 127;
 int speed = 100;
 
 int PWMpin [NUM_CHAN];
@@ -121,24 +91,12 @@ long currentPWM [NUM_CHAN];
 long targetPWM [NUM_CHAN];
 long incPWM [NUM_CHAN];
 long ticksPWM [NUM_CHAN];
-long delayPWM [NUM_CHAN];
-bool fretDownFlags [NUM_CHAN];
-int fretBowCompensation [NUM_CHAN];
-
-int latest_note_ID;
-
-bool ignoreChannelFlag = true;
-bool localRandomization = true;
 
 // ====================================================================================================================================
 // setup ==============================================================================================================================
 // ====================================================================================================================================
 void setup() {
 	int i;
-
-	// need this one earlier for debugging
-	pinMode (LEDpin, OUTPUT);
-//	digitalWrite (LEDpin, HIGH);
 	
 	// Serial
 	Serial.begin (57600);
@@ -150,25 +108,11 @@ void setup() {
 	analogWriteFrequency (3, 23437);	// also changes frequency for pin 4 on Teensy 3.1 (Timer 1)
 	analogWriteResolution (11);
 
-	// pin modes
-	initPWMassignments ();
-	
-	pinMode (SELpin0, INPUT_PULLUP);
-	pinMode (SELpin1, INPUT_PULLUP);
-	pinMode (SELpin2, INPUT_PULLUP);
-	pinMode (SELpin3, INPUT_PULLUP);
-	for (i=0; i<NUM_CHAN; i++) {
-		if ((PWMteensy[i] == T_LEFT) && (PWMboard[i] == B_LEFT)) {
-			pinMode (PWMpin[i], OUTPUT);
-		}
-	}
-
 	// MIDI
 #ifdef USE_MIDI
 	usbMIDI.setHandleNoteOff(OnNoteOff);
 	usbMIDI.setHandleNoteOn(OnNoteOn);
 	usbMIDI.setHandleControlChange(OnControlChange);
-	usbMIDI.setHandleProgramChange(OnProgramChange);
 #endif
 
 	// MIDI file player
@@ -182,27 +126,11 @@ void setup() {
 		SMF.begin (&SD);
 		SMF.setMidiHandler (midiFileCallback);
 		SMF.setSysexHandler (sysexFileCallback);
-	//	SMF.setFilename ("SEQ.MID");
-
-		// new multifile selector
-		pgm = checkSelector ();
-		switch (pgm) {
-			case 1: 	SMF.setFilename ("SEQ1.MID");	break;
-			case 2: 	SMF.setFilename ("SEQ2.MID");	break;
-			case 3: 	SMF.setFilename ("SEQ3.MID");	break;
-			case 4: 	SMF.setFilename ("SEQ4.MID");	break;
-			case 5: 	SMF.setFilename ("SEQ5.MID");	break;
-			case 6: 	SMF.setFilename ("SEQ6.MID");	break;
-			case 7: 	SMF.setFilename ("SEQ7.MID");	break;
-			case 8: 	SMF.setFilename ("SEQ8.MID");	break;
-			case 9: 	SMF.setFilename ("SEQ9.MID");	break;
-			default: 	SMF.setFilename ("SEQ1.MID");	break;
-		}
-	
+		SMF.setFilename ("SEQ.MID");
 		err = SMF.load();
 		if (err != -1) {	// second, check for file
 			DEBUG("\nSMF load Error ");
-			DEBUGN(err);
+			DEBUG(err);
 			SD_available = false;
 		}
 		else {
@@ -211,12 +139,24 @@ void setup() {
 		}
 	}
 
+	// pin modes
+	initPWMassignments ();
+	
+	pinMode (LEDpin, OUTPUT);
+	digitalWrite (LEDpin, HIGH);
+	pinMode (SELpin0, INPUT_PULLUP);
+	pinMode (SELpin1, INPUT_PULLUP);
+	pinMode (SELpin2, INPUT_PULLUP);
+	pinMode (SELpin3, INPUT_PULLUP);
+	for (i=0; i<NUM_CHAN; i++) {
+		if ((PWMteensy[i] == T_LEFT) && (PWMboard[i] == B_LEFT)) {
+			pinMode (PWMpin[i], OUTPUT);
+		}
+	}
+
 	// init
 	resetPWM ();
 	updatePWM ();
-	
-	initArticulation ();
-	readParamFromEEPROM ();
 	
 	// interrupts
 	FlexiTimer2::set (TIME_GRAN, 1.0/1000, tick); // call every 10ms (10x 1ms)
@@ -247,7 +187,7 @@ void initPWMassignments () {
 	PWMpin [L_MOTOR]	=  4;		PWMteensy [L_MOTOR]	 	= T_LEFT;		PWMboard [L_MOTOR]		= B_LEFT;
 	                                                                                            
                                                                                                 
-	PWMpin [R_MOTOR]	=  4;		PWMteensy [R_MOTOR]		= T_RIGHT;		PWMboard [R_MOTOR]		= B_RIGHT;
+	PWMpin [R_MOTOR]	=  5;		PWMteensy [R_MOTOR]		= T_RIGHT;		PWMboard [R_MOTOR]		= B_RIGHT;
 	                                                                                            
 	PWMpin [R_FRET_1 ]	=  6;		PWMteensy [R_FRET_1 ]	= T_RIGHT;		PWMboard [R_FRET_1 ]	= B_RIGHT;
 	PWMpin [R_FRET_2 ]	=  3;		PWMteensy [R_FRET_2 ]	= T_RIGHT;		PWMboard [R_FRET_2 ]	= B_RIGHT;
@@ -262,7 +202,7 @@ void initPWMassignments () {
 	PWMpin [R_FRET_11]	=  4;		PWMteensy [R_FRET_11]	= T_LEFT;		PWMboard [R_FRET_11]	= B_RIGHT;
 	PWMpin [R_FRET_12]	=  3;		PWMteensy [R_FRET_12]	= T_LEFT;		PWMboard [R_FRET_12]	= B_RIGHT;
 
-	PWMpin [R_BOW]		=  5;		PWMteensy [R_BOW]		= T_RIGHT;		PWMboard [R_BOW]		= B_RIGHT;
+	PWMpin [R_BOW]		=  4;		PWMteensy [R_BOW]		= T_RIGHT;		PWMboard [R_BOW]		= B_RIGHT;
 }
 
 void resetPWM () {
@@ -271,7 +211,6 @@ void resetPWM () {
 		currentPWM [NUM_CHAN] = 0;
 		incPWM [NUM_CHAN] = 0;
 		ticksPWM [NUM_CHAN] = 0;
-		delayPWM [NUM_CHAN] = 0;
 	}
 }
 
@@ -315,39 +254,31 @@ void updatePWM () {
 	}
 }
 
-void linePWM (int i, long target, long attack, long delayed) {
+void linePWM (int i, long target, long attack, long delay) {
 //	Serial.println (i);
 //	Serial.println (target);
 //	Serial.println (attack);
-//	Serial.println (delayed);
+//	Serial.println (delay);
 
-	delayPWM[i] = delayed / TIME_GRAN;
-	targetPWM[i] = target;
-	ticksPWM[i] = attack / TIME_GRAN;
-	if (ticksPWM[i] == 0) {
+	if (attack <= 0) {
+		targetPWM[i] = target;
+		currentPWM[i] = target;
+		ticksPWM[i] = 0;
 		incPWM[i] = 0;
-		// we can't set the current value to the target value immediately (like before we introduced the delay). 
-		// instead in the tick() routine when delayPWM has reached zero and ticksPWM is zero, we set the current to the target
 	}
 	else {
-		incPWM[i] = (target - currentPWM[i]) / ticksPWM[i];		
+		targetPWM[i] = target;
+		ticksPWM[i] = attack / TIME_GRAN;
+		incPWM[i] = (target - currentPWM[i]) / ticksPWM[i];
 	}
 }
 
 void tickPWM () {
 	int i;
 	for (i=0; i<NUM_CHAN; i++) {
-		if (delayPWM[i] > 0) {
-			delayPWM[i]--;
-		}
-		else {
-			if (ticksPWM[i] > 0) {
-				currentPWM[i] += incPWM[i];
-				ticksPWM[i]--;
-			}
-			else {
-				currentPWM[i] = targetPWM[i];
-			}			
+		if (ticksPWM[i] > 0) {
+			currentPWM[i] += incPWM[i];
+			ticksPWM[i]--;
 		}
 	}
 	
@@ -356,130 +287,53 @@ void tickPWM () {
 // END PWM ===============================================================
 //
 // Notes ===================================================================
-t_valRange	noteOnFretDelay;
-t_valRange	noteOnBowDelay;
-t_valRange	noteOnMotorDelay;
-t_valRange	noteOffFretDelay;
-t_valRange	noteOffBowDelay;
-t_valRange	noteOffMotorDelay;
-
-t_valRange	motorSpeed_L;
-t_valRange	motorSpeed_R;
-t_valRange	bowPressure_L;
-t_valRange	bowPressure_R;
-t_valRange	fretPressure;
-
-t_valRange	noteOnFretAttack;
-t_valRange	noteOnBowAttack;
-t_valRange	noteOnMotorAttack;
-t_valRange	noteOffFretRelease;
-t_valRange	noteOffBowRelease;
-t_valRange	noteOffMotorRelease;
-
-
-
-bool note_playing_flag_L = false;
-bool note_playing_flag_R = false;
-int last_played_note_L;
-int last_played_note_R;
+bool note_playing_left_flag = false;
+bool note_playing_right_flag = false;
+int last_played_note;
 
 void PlayNote (int ID, int velocity) {
-	long fretPressureLocal = (MAX_PWM_LINE * fretPressure.c) / 127;
-	long bowPressure, motorSpeed;
+	linePWM (ID, MAX_PWM_LINE, 100, 0);
+	last_played_note = ID;
 	
-	if ((ID != L_OPEN) && (ID != R_OPEN)) {
-	//	linePWM (ID, MAX_PWM_LINE, 10, 0);
-	//	linePWM (ID, MAX_PWM_LINE, noteOnFretAttack.c, noteOnFretDelay.c);
-		linePWM (ID, fretPressureLocal, noteOnFretAttack.c, noteOnFretDelay.c);
-		//			  16 bit         7 bit
-	}
-		
-	fretDownFlags [ID] = true;
-
+//	delay (200);	roll delay into linePWM function, so we don't block
+	
 	if (PWMboard [ID] == B_LEFT) {
-		last_played_note_L = ID;
-		
-		if (note_playing_flag_L) {
+		if (note_playing_left_flag) {
 			// if a note is already playing we don't have to push down the bow again (aka legato)
 		}
 		else {
-			bowPressure	= (MAX_PWM_LINE * bowPressure_L.c * fretBowCompensation [ID]) / 8001;
-			//             16 bit         7 bit             7 bit = 30 bit              127*63 (13 bit)
-			bowPressure = (bowPressure * potBow) / 127;
-			linePWM (L_BOW, bowPressure, noteOnBowAttack.c, noteOnBowDelay.c);
-		
-			motorSpeed = (MAX_PWM_LINE * motorSpeed_L.c) / 127;
-			motorSpeed = (motorSpeed * potMot) / 127;
-			linePWM (L_MOTOR, motorSpeed, noteOnMotorAttack.c, noteOnMotorDelay.c);
+			linePWM (L_MOTOR, MAX_PWM_LINE, 100, 0);
+			linePWM (L_BOW, MAX_PWM_LINE, 100, 0);
 		}
-		note_playing_flag_L = true;
+		note_playing_left_flag = true;
 	}
 	else {
-		last_played_note_R = ID;
-
-		if (note_playing_flag_R) {
+		if (note_playing_right_flag) {
 		}
 		else {
-			bowPressure	= (MAX_PWM_LINE * bowPressure_R.c * fretBowCompensation [ID]) / 8001;
-			//             16 bit         7 bit             7 bit = 30 bit              127*63 (13 bit)
-			bowPressure = (bowPressure * potBow) / 127;
-			linePWM (R_BOW, bowPressure, noteOnBowAttack.c, noteOnBowDelay.c);
-		
-			motorSpeed = (MAX_PWM_LINE * motorSpeed_R.c) / 127;
-			motorSpeed = (motorSpeed * potMot) / 127;
-			linePWM (R_MOTOR, motorSpeed, noteOnMotorAttack.c, noteOnMotorDelay.c);
-
-
-		//	linePWM (R_BOW, (MAX_PWM_LINE * bowPressure_R.c * fretBowCompensation [ID]) / 8001, noteOnBowAttack.c, noteOnBowDelay.c);
-
-		//	linePWM (R_MOTOR, (MAX_PWM_LINE * motorSpeed_R.c) / 127, noteOnMotorAttack.c, noteOnMotorDelay.c);
+			linePWM (R_MOTOR, MAX_PWM_LINE, 100, 0);
+			linePWM (R_BOW, MAX_PWM_LINE, 100, 0);
 		}
-		note_playing_flag_R = true;
+		note_playing_right_flag = true;
 	}	
 }
 
 void StopNote (int ID, int velocity) {
-	int i, num;
+	linePWM (ID, MIN_PWM_LINE, 100, 0);
 	
-	if ((ID != L_OPEN) && (ID != R_OPEN)) {
-		linePWM (ID, MIN_PWM_LINE, noteOffFretRelease.c, noteOffFretDelay.c);
-	}
-	
-	fretDownFlags [ID] = false;
-	
-	num = 0;
-	for (i=L_FRET_1; i<=L_FRET_12; i++) {
-		if (fretDownFlags [i]) {
-			num++;
+	if (last_played_note == ID) {	// simple scheme to only release after the last played note has been released. We might need to buffer all notes and check if any is still being held
+	//	delay (200);
+
+		if (PWMboard [ID] == B_LEFT) {
+			linePWM (L_MOTOR, MIN_PWM_LINE, 100, 0);
+			linePWM (L_BOW, MIN_PWM_LINE, 100, 0);
+			note_playing_left_flag = false;
 		}
-	}
-
-//	if (last_played_note_L == ID) {	// simple scheme to only release after the last played note has been released. We might need to buffer all notes and check if any is still being held
-		// we should keep an array of notes held down and only release the box after all frets have been released
-	if (num == 0) {
-	//	if (PWMboard [ID] == B_LEFT) {
-			linePWM (L_BOW, MIN_PWM_LINE, noteOffBowRelease.c, noteOffBowDelay.c);
-			linePWM (L_MOTOR, MIN_PWM_LINE, noteOffMotorRelease.c, noteOffMotorDelay.c);
-			note_playing_flag_L = false;
-	//	}
-	}
-	
-
-	// same procedure for right string
-	num = 0;
-	for (i=R_FRET_1; i<=R_FRET_12; i++) {
-		if (fretDownFlags [i]) {
-			num++;
-		}
-	}
-
-//	if (last_played_note_R == ID) {
-	if (num == 0) {
-	//	if (PWMboard [ID] == B_RIGHT) {
-			linePWM (R_BOW, MIN_PWM_LINE, noteOffBowRelease.c, noteOffBowDelay.c);
-			linePWM (R_MOTOR, MIN_PWM_LINE, noteOffMotorRelease.c, noteOffMotorDelay.c);
-			note_playing_flag_R = false;
-	//	}			
+		else {
+			linePWM (R_MOTOR, MIN_PWM_LINE, 100, 0);
+			linePWM (R_BOW, MIN_PWM_LINE, 100, 0);
+			note_playing_right_flag = false;
+		}			
 	}
 }
 
@@ -500,341 +354,56 @@ void checkAnalog () {
 	trl = analogRead (TRLpin);
 	pot = analogRead (POTpin);
 	
-	if (pgm == 15) {
+	if (pgm == 2) {
 		linePWM (L_MOTOR, map (trl, 0, 1023, 0, MAX_PWM_LINE), 10, 0);
 	}
-	
-	if (trl < 100) {
-		potBow = 0;
-		potMot = 0;
-	}
-	else if (trl < 512) {
-		potBow = map (trl, 100, 511, 0, 127);
-		potMot = 0;
-	}
-	else if (trl < 924) {
-		potBow = 127;
-		potMot = map (trl, 512, 923, 0, 127);
-	}
-	else {
-		potBow = 127;
-		potMot = 127;
-	}
+		
 }
 // END Sensors ============================================================
 //
 // MIDI ===================================================================
-#define MIDI_NOTE_OPEN_STRING_L	60
-#define MIDI_NOTE_OPEN_STRING_R	84
+int midiCtrlIn;
 
 void checkMIDI () {
-	int ret;
 #ifdef USE_MIDI
-	if (usbMIDI.read()) { // USB MIDI receive
-	//	digitalWrite (LEDpin, HIGH);
-	//	digitalWrite (LEDpin, LOW);	
-		ret = usbMIDI.getType();
-		if (ret == 7) {
-			OnSysex ();
-		}
-	}
+	usbMIDI.read(); // USB MIDI receive
 #endif
 }
-void OnNoteOn (byte channel, byte note, byte velocity) {
+void OnNoteOn(byte channel, byte note, byte velocity) {
 	int ch;
 
-	if ((channel == 1) || (ignoreChannelFlag)) {
-		if ((note >= MIDI_NOTE_OPEN_STRING_L) && (note <= MIDI_NOTE_OPEN_STRING_L + 12)) {
-			ch = note - MIDI_NOTE_OPEN_STRING_L + L_OPEN;
-		}		
+	if ((note >= 60) && (note <= 71)) {
+		ch = note - 60 + L_FRET_1;
 	}
-	if ((channel == 2) || (ignoreChannelFlag)) {
-		if ((note >= MIDI_NOTE_OPEN_STRING_R) && (note <= MIDI_NOTE_OPEN_STRING_R + 12)) {
-			ch = note - MIDI_NOTE_OPEN_STRING_R + R_OPEN;
-		}		
+	else if ((note >= 72) && (note <= 83)) {
+		ch = note - 72 + R_FRET_1;
 	}
-
-	if (localRandomization) {
-		RandomizeArticulationOn ();
-		
-		// use one of the trimpots to override the minimum fret pressure
-		long override_pressure_min, override_pressure_max;
-		
-		if (tru < 768) {	// only use lower 3/4 of range. if above we keep the setting as stored in EEPROM / transmitted via MIDI
-			if (tru < 256) {
-				override_pressure_min = map (tru, 0, 255, 127, 60);				
-				override_pressure_max = 127;
-			}
-			else if (tru < 512) {
-				override_pressure_min = 60;
-				override_pressure_max = map (tru, 256, 511, 127, 80);				
-			}
-			else {
-				override_pressure_min = 60;
-				override_pressure_max = 80;
-			}
-			fretPressure.c = random (override_pressure_min, override_pressure_max);
-		//	digitalWrite (LEDpin, HIGH);
-		}
-		else {
-		//	digitalWrite (LEDpin, LOW);
-		}
-	}
-	
+	else return;
+ 
+//	linePWM (ch, MAX_PWM_LINE, 0, 0);
+//	linePWM (ch, MAX_PWM_LINE, (127-velocity) * 10,0);
 	PlayNote (ch, 0);
-	latest_note_ID = ch;
 }
 
-void OnNoteOff (byte channel, byte note, byte velocity) {
+void OnNoteOff(byte channel, byte note, byte velocity) {
 	int ch;
 	
-	if ((channel == 1) || (ignoreChannelFlag)) {
-		if ((note >= MIDI_NOTE_OPEN_STRING_L) && (note <= MIDI_NOTE_OPEN_STRING_L + 12)) {
-			ch = note - MIDI_NOTE_OPEN_STRING_L + L_OPEN;
-		}
+	if ((note >= 60) && (note <= 71)) {
+		ch = note - 60 + L_FRET_1;
 	}
-	if ((channel == 2) || (ignoreChannelFlag)) {
-		if ((note >= MIDI_NOTE_OPEN_STRING_R) && (note <= MIDI_NOTE_OPEN_STRING_R + 12)) {
-			ch = note - MIDI_NOTE_OPEN_STRING_R + R_OPEN;
-		}		
+	else if ((note >= 72) && (note <= 83)) {
+		ch = note - 72 + R_FRET_1;
 	}
+	else return;
 	
-	if (localRandomization) {
-		RandomizeArticulationOff ();
-	}
+//	linePWM (ch, MIN_PWM_LINE, 0, 0);
 	StopNote (ch, 0);
 }
 
-void OnControlChange (byte channel, byte control, byte value) {
-	// calling all 16 (currently) control changes separately takes 170µs to process
-//	digitalWrite (LEDpin, HIGH);
-
-//	DEBUGN_LN (channel);
-//	DEBUGN_LN (control);
-//	DEBUGN_LN (value);
-
-	switch (channel) {
-	case 1:		
-		switch (control) {
-		case 0: 	noteOnFretDelay.c = value * 10;			break;
-		case 1:		noteOnBowDelay.c = value * 10;			break;
-		case 2:		noteOnMotorDelay.c = value * 10;		break;
-		case 3:		noteOffFretDelay.c = value * 10;		break;
-		case 4:		noteOffBowDelay.c = value * 10;			break;
-		case 5:		noteOffMotorDelay.c = value * 10;		break;
-		
-		case 10:	motorSpeed_L.c = value;		linePWM (L_MOTOR, (MAX_PWM_LINE * motorSpeed_L.c) / 127, 0, 0);			break;	// don't just adjust the parameter, apply immediately
-		case 11:	motorSpeed_R.c = value;		linePWM (R_MOTOR, (MAX_PWM_LINE * motorSpeed_R.c) / 127, 0, 0);			break;
-		case 12:	bowPressure_L.c = value;	linePWM (L_BOW, (MAX_PWM_LINE * bowPressure_L.c) / 127, 0, 0);			break;
-		case 13:	bowPressure_R.c = value;	linePWM (R_BOW, (MAX_PWM_LINE * bowPressure_R.c) / 127, 0, 0);			break;
-		case 14:	fretPressure.c = value;		linePWM (latest_note_ID, (MAX_PWM_LINE * fretPressure.c) / 127, 0, 0);	break;
-
-		case 20:	noteOnFretAttack.c = value * 10;		break;
-		case 21:	noteOnBowAttack.c = value * 10;			break;
-		case 22:	noteOnMotorAttack.c = value * 10;		break;
-		case 23:	noteOffFretRelease.c = value * 10;		break;
-		case 24:	noteOffBowRelease.c = value * 10;		break;
-		case 25:	noteOffMotorRelease.c = value * 10;		break;
-		
-		// min/max for the above
-		case 40:	noteOnFretDelay.min = value * 10;		break;
-		case 41:	noteOnBowDelay.min = value * 10;		break;
-		case 42:	noteOnMotorDelay.min = value * 10;		break;
-		case 43:	noteOffFretDelay.min = value * 10;		break;
-		case 44:	noteOffBowDelay.min = value * 10;		break;
-		case 45:	noteOffMotorDelay.min = value * 10;		break;
-		case 50:	noteOnFretDelay.max = value * 10;		break;
-		case 51:	noteOnBowDelay.max = value * 10;		break;
-		case 52:	noteOnMotorDelay.max = value * 10;		break;
-		case 53:	noteOffFretDelay.max = value * 10;		break;
-		case 54:	noteOffBowDelay.max = value * 10;		break;
-		case 55:	noteOffMotorDelay.max = value * 10;		break;
-		
-		case 60:	motorSpeed_L.min = value;				break;
-		case 61:	motorSpeed_R.min = value;				break;
-		case 62:	bowPressure_L.min = value;				break;
-		case 63:	bowPressure_R.min = value;				break;
-		case 64:	fretPressure.min = value;				break;
-		case 70:	motorSpeed_L.max = value;				break;
-		case 71:	motorSpeed_R.max = value;				break;
-		case 72:	bowPressure_L.max = value;				break;
-		case 73:	bowPressure_R.max = value;				break;
-		case 74:	fretPressure.max = value;				break;
-
-		case 80:	noteOnFretAttack.min = value * 10;		break;
-		case 81:	noteOnBowAttack.min = value * 10;		break;
-		case 82:	noteOnMotorAttack.min = value * 10;		break;
-		case 83:	noteOffFretRelease.min = value * 10;	break;
-		case 84:	noteOffBowRelease.min = value * 10;		break;
-		case 85:	noteOffMotorRelease.min = value * 10;	break;
-		case 90:	noteOnFretAttack.max = value * 10;		break;
-		case 91:	noteOnBowAttack.max = value * 10;		break;
-		case 92:	noteOnMotorAttack.max = value * 10;		break;
-		case 93:	noteOffFretRelease.max = value * 10;	break;
-		case 94:	noteOffBowRelease.max = value * 10;		break;
-		case 95:	noteOffMotorRelease.max = value * 10;	break;
-		}
-		break;
-		
-	case 2:
-		if ((control >= L_OPEN) && (control <= L_FRET_12)) {
-			fretBowCompensation [control] = value;
-		}
-		if ((control >= R_OPEN) && (control <= R_FRET_12)) {
-			fretBowCompensation [control] = value;
-		}
-		break;
-		
-	case 16:
-		switch (control) {
-		case 127: 	localRandomization = value;		break;
-		}
-		break;
-	}
-	
-//	digitalWrite (LEDpin, LOW);	
-}
-
-void OnProgramChange (byte channel, byte program) {
-	if ((channel == 7) && (program == 73)) {
-	//	digitalWrite (LEDpin, HIGH);
-		writeParamToEEPROM ();
-	}
-	if ((channel == 11) && (program == 94)) {
-	//	digitalWrite (LEDpin, LOW);
-		readParamFromEEPROM ();
-	}
-}
-
-void OnSysex () {
-	int i, num;
-	byte *sxBuf;
-	byte channel, note, velocity;
-	int mode;
-	
-#ifdef USE_MIDI	
-	num = usbMIDI.getData1();
-	if (num != 22) return;
-	
-	sxBuf = usbMIDI.getSysExArray();
-	if (sxBuf [0] != 240) return;
-#else
-	return;
-#endif
-
-	note 		= sxBuf [1];
-	velocity	= sxBuf [2];
-	channel		= sxBuf [3];
-	mode		= sxBuf [4];
-	
-	if (mode == 1) {
-		if (velocity != 0) {	// Note On
-			noteOnFretDelay.c		= sxBuf [5] * 10;
-			noteOnBowDelay.c 		= sxBuf [6] * 10;
-			noteOnMotorDelay.c		= sxBuf [7] * 10;
-			
-			noteOnFretAttack.c		= sxBuf [11] * 10;
-			noteOnBowAttack.c		= sxBuf [12] * 10;
-			noteOnMotorAttack.c		= sxBuf [13] * 10;
-			
-			fretPressure.c			= sxBuf [19];
-			
-			if ((note >= MIDI_NOTE_OPEN_STRING_L) && (note <= MIDI_NOTE_OPEN_STRING_L + 12)) {
-				motorSpeed_L.c		= sxBuf [17];
-				bowPressure_L.c		= sxBuf [18];
-			}
-			else if (channel == 2) {
-				motorSpeed_R.c		= sxBuf [17];
-				bowPressure_R.c		= sxBuf [18];
-			}
-
-			OnNoteOn (channel, note, velocity);
-		}
-		else {	// Note Off
-			noteOffFretDelay.c		= sxBuf [8] * 10;
-			noteOffBowDelay.c 		= sxBuf [9] * 10;
-			noteOffMotorDelay.c		= sxBuf [10] * 10;
-			
-			noteOffFretRelease.c	= sxBuf [14] * 10;
-			noteOffBowRelease.c		= sxBuf [15] * 10;
-			noteOffMotorRelease.c	= sxBuf [16] * 10;
-
-			OnNoteOff (channel, note, velocity);
-		}
-	}	
+void OnControlChange(byte channel, byte control, byte value) {
+	midiCtrlIn = value;
 }
 // END MIDI ===============================================================
-
-void initArticulation () {
-	int i;
-	
-	initStruct (&noteOnFretDelay, 0);
-	initStruct (&noteOnBowDelay, 0);
-	initStruct (&noteOnMotorDelay, 0);
-	initStruct (&noteOffFretDelay, 0);
-	initStruct (&noteOffBowDelay, 0);
-	initStruct (&noteOffMotorDelay, 0);
-
-	initStruct (&motorSpeed_L, 127);
-	initStruct (&motorSpeed_R, 127);
-	initStruct (&bowPressure_L, 127);
-	initStruct (&bowPressure_R, 127);
-	initStruct (&fretPressure, 127);
-
-	initStruct (&noteOnFretAttack, 0);
-	initStruct (&noteOnBowAttack, 0);
-	initStruct (&noteOnMotorAttack, 0);
-	initStruct (&noteOffFretRelease, 0);
-	initStruct (&noteOffBowRelease, 0);
-	initStruct (&noteOffMotorRelease, 0);
-	
-	// could set all to 127, but this better illustrates which values matter
-	for (i=L_OPEN; i<=L_FRET_12; i++) {
-		fretBowCompensation [i] = 63;	// not 127 - we want to be able to increase!
-	}
-	for (i=R_OPEN; i<=R_FRET_12; i++) {
-		fretBowCompensation [i] = 63;
-	}
-}
-
-void RandomizeArticulationOn () {
-	randomRangeStruct (&noteOnFretDelay);
-//	noteOnFretDelay.c = random (noteOnFretDelay.min, noteOnFretDelay.max + 1);
-//	noteOnFretDelay.c = random (500, 1000);
-	randomRangeStruct (&noteOnBowDelay);
-	randomRangeStruct (&noteOnMotorDelay);
-
-	randomRangeStruct (&motorSpeed_L);
-	randomRangeStruct (&motorSpeed_R);
-	randomRangeStruct (&bowPressure_L);
-	randomRangeStruct (&bowPressure_R);
-	randomRangeStruct (&fretPressure);
-
-	randomRangeStruct (&noteOnFretAttack);
-	randomRangeStruct (&noteOnBowAttack);
-	randomRangeStruct (&noteOnMotorAttack);
-}
-
-void RandomizeArticulationOff () {
-	randomRangeStruct (&noteOffFretDelay);
-	randomRangeStruct (&noteOffBowDelay);
-	randomRangeStruct (&noteOffMotorDelay);
-
-	randomRangeStruct (&noteOffFretRelease);
-	randomRangeStruct (&noteOffBowRelease);
-	randomRangeStruct (&noteOffMotorRelease);	
-}
-
-int randomRangeStruct (t_valRange *v) {
-	v->c = random (v->min, v->max+1);	// make maximum inclusive
-}
-
-int initStruct (t_valRange *v, long vi) {
-	v->c = vi;
-	v->min = vi;
-	v->max = vi;
-}
-
 
 // ====================================================================================
 // MAIN LOOP - MAIN TICK
@@ -844,49 +413,34 @@ int initStruct (t_valRange *v, long vi) {
 // ====================================================================================
 void tick()
 {
-	int speed;
 //	DEBUG("tick");
 
 	tickPWM ();	
 	checkAnalog ();
-	 
-	speed = map (pot, 0, 1023, 60, 180);
-	SMF.setTempo (speed);
 }
-void loopt () {		// test loop
-	SX_STRING ("hello ");
-	SX_NUM_LN (404);
-	delay (1000);
-}
+
 void loop () {
-//	loopt ();	return;
 
 	pgm = checkSelector ();
-//	pgm = 0;
+	pgm = 0;
 
 	switch (pgm) {
 	case 0:
 		// MAIN: listen to MIDI, play notes
 		checkMIDI ();
 		break;
-		
 	case 1:
-	case 2:
-	case 3:
-	case 4:
-	case 5:
-	case 6:
-	case 7:
-	case 8:
-	case 9:
 		// MIDI file player: play from SD card (maybe more than one song, maybe use second selector on right board to select this)
 		playMIDIfile ();
 		break;
-	case 14:
+	case 2:
+		// host-assisted adjust & test mode: set PWM tables and other parameters, instrument returns MIDI diagnostics
+		break;
+	case 3:
 		// standalone test mode
 		speed = pot + 50;
 		break;
-	case 15:
+	case 4:
 		// sequence test: play a simple sequence
 		fretWithMotorSequence ();
 		fretSequence ();
@@ -979,24 +533,15 @@ void midiFileCallback(midi_event *pev)
 		velocity	= pev->data[2];
 		
 		if (velocity != 0) {
-		//	digitalWrite (LEDpin, HIGH);
-			OnNoteOn (1, noteNum, velocity);
+			digitalWrite (LEDpin, HIGH);
 		//	linePWM (noteNum - 0x30 + 1, MAX_PWM_LINE, map (pot, 0, 1023, 500, 100), 0);
-		//	linePWM (noteNum - 0x30 + L_FRET_1, MAX_PWM_LINE, 0, 0);
+			linePWM (noteNum - 0x30 + L_FRET_1, MAX_PWM_LINE, 0, 0);
 		}
 		else {
-		//	digitalWrite (LEDpin, LOW);			
-			OnNoteOff (1, noteNum, velocity);
+			digitalWrite (LEDpin, LOW);			
 		//	linePWM (noteNum - 0x30 + 1, MIN_PWM_LINE, map (pot, 0, 1023, 500, 100), 0);
-		//	linePWM (noteNum - 0x30 + L_FRET_1, MIN_PWM_LINE, 0, 0);
+			linePWM (noteNum - 0x30 + L_FRET_1, MIN_PWM_LINE, 0, 0);
 		}
-	}
-	else if (cmd == 0x80) {		// e.g. Finale creates "proper" NoteOff commands instead of NoteOns with a velocity of 0
-		noteNum		= pev->data[1];
-		velocity	= pev->data[2];
-
-	//	digitalWrite (LEDpin, LOW);			
-		OnNoteOff (1, noteNum, velocity);
 	}
 	
 /*#if USE_MIDI
@@ -1008,7 +553,7 @@ void midiFileCallback(midi_event *pev)
 	else
 		Serial.write(pev->data, pev->size);
 #endif*/
-/*  DEBUG("\nM T");
+  DEBUG("\nM T");
   DEBUG(pev->track);
   DEBUG(":  Ch ");
   DEBUG(pev->channel+1);
@@ -1018,7 +563,6 @@ void midiFileCallback(midi_event *pev)
 	DEBUGX(pev->data[i]);
     DEBUG(' ');
   }
-*/
 }
 
 void sysexFileCallback(sysex_event *pev)
@@ -1027,7 +571,7 @@ void sysexFileCallback(sysex_event *pev)
 // really be processed, so we just ignore it here.
 // This callback is set up in the setup() function.
 {
-/*  DEBUG("\nS T");
+  DEBUG("\nS T");
   DEBUG(pev->track);
   DEBUG(": Data ");
   for (uint8_t i=0; i<pev->size; i++)
@@ -1035,7 +579,6 @@ void sysexFileCallback(sysex_event *pev)
     DEBUGX(pev->data[i]);
 	DEBUG(' ');
   }
-*/
 }
 
 void midiSilence(void)
@@ -1103,168 +646,3 @@ void playMIDIfile (void)
 }
 
 
-
-// ========================================================================
-//	EEPROM
-// ========================================================================
-
-void writeParamToEEPROM () {
-	int i;
-	
-	EEPROM.write (0, 1);
-	EEPROM.write (1, 2);
-	EEPROM.write (2, 3);
-	EEPROM.write (3, 4);
-	                                                     
-	splitEEPROMbytes ( 4, noteOnFretDelay.min);	 
-	splitEEPROMbytes ( 6, noteOnBowDelay.min);		 
-	splitEEPROMbytes ( 8, noteOnMotorDelay.min);	 
-	splitEEPROMbytes (10, noteOffFretDelay.min);	 
-	splitEEPROMbytes (12, noteOffBowDelay.min);	 
-	splitEEPROMbytes (14, noteOffMotorDelay.min);	 
-	                                                     
-	splitEEPROMbytes (16, noteOnFretDelay.max);	 
-	splitEEPROMbytes (18, noteOnBowDelay.max);		 
-	splitEEPROMbytes (20, noteOnMotorDelay.max);	 
-	splitEEPROMbytes (22, noteOffFretDelay.max);	 
-	splitEEPROMbytes (24, noteOffBowDelay.max);	 
-	splitEEPROMbytes (26, noteOffMotorDelay.max);	 
-	                                                     
-	                                                     
-	splitEEPROMbytes (28, motorSpeed_L.min);		 
-	splitEEPROMbytes (30, motorSpeed_R.min);		 
-	splitEEPROMbytes (32, bowPressure_L.min);		 
-	splitEEPROMbytes (34, bowPressure_R.min);		 
-	splitEEPROMbytes (36, fretPressure.min);		 
-                                                         
-	splitEEPROMbytes (38, motorSpeed_L.max);		 
-	splitEEPROMbytes (40, motorSpeed_R.max);		 
-	splitEEPROMbytes (42, bowPressure_L.max);		 
-	splitEEPROMbytes (44, bowPressure_R.max);		 
-	splitEEPROMbytes (46, fretPressure.max);		 
-                                                         
-                                                         
-	splitEEPROMbytes (48, noteOnFretAttack.min);	 
-	splitEEPROMbytes (50, noteOnBowAttack.min);	 
-	splitEEPROMbytes (52, noteOnMotorAttack.min);	 
-	splitEEPROMbytes (54, noteOffFretRelease.min);	 
-	splitEEPROMbytes (56, noteOffBowRelease.min);	 
-	splitEEPROMbytes (58, noteOffMotorRelease.min); 
-	                                                     
-	splitEEPROMbytes (60, noteOnFretAttack.max);	 
-	splitEEPROMbytes (62, noteOnBowAttack.max);	 
-	splitEEPROMbytes (64, noteOnMotorAttack.max);	 
-	splitEEPROMbytes (66, noteOffFretRelease.max);	 
-	splitEEPROMbytes (68, noteOffBowRelease.max);	 
-	splitEEPROMbytes (70, noteOffMotorRelease.max); 
-	
-	
-	for (i=0; i<NUM_CHAN; i++) {	// here we store all, even though not all contain meaningful data
-		splitEEPROMbytes (72 + i*2, fretBowCompensation [i]);		
-	}
-	// NUM_CHAN is 28, so the next address would be 72 + 28* 2 = 128
-	
-	
-}
-
-void splitEEPROMbytes (int i, long l) {
-	EEPROM.write (i,   l >> 8);	
-	EEPROM.write (i+1, l & 0xFF);
-}
-long mergeEEPROMbytes (int i) {
-	return ((((long) EEPROM.read (i)) << 8) + (long) EEPROM.read (i+1));
-}
-
-void readParamFromEEPROM () {
-	int i;
-	
-	if (EEPROM.read (0) != 1)	return;
-	if (EEPROM.read (1) != 2)	return;
-	if (EEPROM.read (2) != 3)	return;
-	if (EEPROM.read (3) != 4)	return;
-	
-	noteOnFretDelay.min 		= mergeEEPROMbytes (4);
-	noteOnBowDelay.min 			= mergeEEPROMbytes (6);
-	noteOnMotorDelay.min 		= mergeEEPROMbytes (8);
-	noteOffFretDelay.min 		= mergeEEPROMbytes (10);
-	noteOffBowDelay.min 		= mergeEEPROMbytes (12);
-	noteOffMotorDelay.min 		= mergeEEPROMbytes (14);
- 
-	noteOnFretDelay.max 		= mergeEEPROMbytes (16);
-	noteOnBowDelay.max 			= mergeEEPROMbytes (18);
-	noteOnMotorDelay.max 		= mergeEEPROMbytes (20);
-	noteOffFretDelay.max 		= mergeEEPROMbytes (22);
-	noteOffBowDelay.max 		= mergeEEPROMbytes (24);
-	noteOffMotorDelay.max 		= mergeEEPROMbytes (26);
-
-
-	motorSpeed_L.min			= mergeEEPROMbytes (28);
-	motorSpeed_R.min			= mergeEEPROMbytes (30);
-	bowPressure_L.min			= mergeEEPROMbytes (32);
-	bowPressure_R.min			= mergeEEPROMbytes (34);
-	fretPressure.min			= mergeEEPROMbytes (36);
-
-	motorSpeed_L.max			= mergeEEPROMbytes (38);
-	motorSpeed_R.max			= mergeEEPROMbytes (40);
-	bowPressure_L.max			= mergeEEPROMbytes (42);
-	bowPressure_R.max			= mergeEEPROMbytes (44);
-	fretPressure.max			= mergeEEPROMbytes (46);
-	
-
-	noteOnFretAttack.min		= mergeEEPROMbytes (48);
-	noteOnBowAttack.min			= mergeEEPROMbytes (50);
-	noteOnMotorAttack.min		= mergeEEPROMbytes (52);
-	noteOffFretRelease.min		= mergeEEPROMbytes (54);
-	noteOffBowRelease.min		= mergeEEPROMbytes (56);
-	noteOffMotorRelease.min		= mergeEEPROMbytes (58);
-
-	noteOnFretAttack.max		= mergeEEPROMbytes (60);
-	noteOnBowAttack.max			= mergeEEPROMbytes (62);
-	noteOnMotorAttack.max		= mergeEEPROMbytes (64);
-	noteOffFretRelease.max		= mergeEEPROMbytes (66);
-	noteOffBowRelease.max		= mergeEEPROMbytes (68);
-	noteOffMotorRelease.max		= mergeEEPROMbytes (70);
-	
-	
-	for (i=0; i<NUM_CHAN; i++) {
-		fretBowCompensation [i] = mergeEEPROMbytes (72 + i*2);		
-	}	
-}
-
-
-
-// ========================================================================
-//	DEBUG
-// ========================================================================
-#ifdef DEBUG_ENABLE
-#ifdef USE_MIDI
-char num_buf [5];
-byte sx_buf [256];
-#endif
-#endif
-
-
-void SX_STRING (char *s) {
-	int i, l;
-
-	l = strlen (s);
-		
-	sx_buf [0] = 240;
-	for (i=0; i<l; i++) {
-		sx_buf[i+1] = s[i];
-	}
-	sx_buf [i+1] = 247;
-	usbMIDI.sendSysEx (l+2, sx_buf);
-}
-
-void SX_NUM (long n) {
-	sprintf (num_buf, "%ld", n);
-	num_buf [4] = 0;	// make sure string is 0-terminated
-	SX_STRING (num_buf);
-}
-
-void SX_NUM_LN (long n) {
-	sprintf (num_buf, "%ld\n", n);
-	num_buf [5] = 0;	// make sure string is 0-terminated
-	SX_STRING (num_buf);
-}
