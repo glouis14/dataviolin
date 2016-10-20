@@ -3,6 +3,7 @@
 	
 	to do:
 	- more hierarchical structures for all the parameters
+	- combine ADSR concept with planned overshoot functionality
 */
 
 #include <FlexiTimer2.h>
@@ -16,17 +17,21 @@
 
 #ifdef DEBUG_ENABLE
 #ifdef USE_MIDI // set up for direct MIDI serial output
-#define	DEBUG(x)	SX_STRING(x)
-#define DEBUGN(x)	SX_NUM(x)
+#define	DEBUG(x)		SX_STRING(x)
+#define DEBUGN(x)		SX_NUM(x)
+#define DEBUGN_LN(x)	SX_NUM_LN(x)
 #define	DEBUGX(x)
 #else // don't use MIDI to allow printing debug statements
-#define	DEBUG(x)	Serial.print(x)
-#define	DEBUGN(x)	Serial.print(x)
-#define	DEBUGX(x)	Serial.print(x, HEX)
+#define	DEBUG(x)		Serial.print(x)
+#define	DEBUGN(x)		Serial.print(x)
+#define	DEBUGN_LN(x)	Serial.println(x)
+#define	DEBUGX(x)		Serial.print(x, HEX)
 #endif
 #else
 #define	DEBUG(x)
 #define	DEBUGX(x)
+#define	DEBUGN(x)
+#define	DEBUGN_LN(x)
 #endif
 
 
@@ -99,7 +104,6 @@ typedef struct {
 	long	min;
 	long	max;
 } t_valRange;
-t_valRange	motorSpeed_L;
 int randomRangeStruct (t_valRange *v);
 int initStruct (t_valRange *v, long vi);
 	
@@ -349,7 +353,7 @@ t_valRange	noteOffFretDelay;
 t_valRange	noteOffBowDelay;
 t_valRange	noteOffMotorDelay;
 
-//t_valRange	motorSpeed_L;
+t_valRange	motorSpeed_L;
 t_valRange	motorSpeed_R;
 t_valRange	bowPressure_L;
 t_valRange	bowPressure_R;
@@ -744,7 +748,7 @@ void tick()
 }
 void loopt () {		// test loop
 	SX_STRING ("hello ");
-	SX_NUM (404);
+	SX_NUM_LN (404);
 	delay (1000);
 }
 void loop () {
@@ -1131,3 +1135,11 @@ void SX_NUM (long n) {
 	num_buf [4] = 0;	// make sure string is 0-terminated
 	SX_STRING (num_buf);
 }
+
+
+void SX_NUM_LN (long n) {
+	sprintf (num_buf, "%ld\n", n);
+	num_buf [5] = 0;	// make sure string is 0-terminated
+	SX_STRING (num_buf);
+}
+
