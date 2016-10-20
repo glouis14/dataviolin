@@ -1,6 +1,8 @@
 /*
 	DataViolin - a project by Jon Rose
 	
+	to do:
+	- more hierarchical structures for all the parameters
 */
 
 #include <FlexiTimer2.h>
@@ -9,14 +11,24 @@
 #include <MD_MIDIFile.h>
 #include <EEPROM.h>
 
-//#define	USE_MIDI
+#define DEBUG_ENABLE
+#define	USE_MIDI
+
+#ifdef DEBUG_ENABLE
 #ifdef USE_MIDI // set up for direct MIDI serial output
-#define	DEBUG(x)
+#define	DEBUG(x)	SX_STRING(x)
+#define DEBUGN(x)	SX_NUM(x)
 #define	DEBUGX(x)
 #else // don't use MIDI to allow printing debug statements
 #define	DEBUG(x)	Serial.print(x)
+#define	DEBUGN(x)	Serial.print(x)
 #define	DEBUGX(x)	Serial.print(x, HEX)
 #endif
+#else
+#define	DEBUG(x)
+#define	DEBUGX(x)
+#endif
+
 
 #define		SD_SELECT_PIN  21
 bool 		SD_available = false;
@@ -153,7 +165,7 @@ void setup() {
 		err = SMF.load();
 		if (err != -1) {	// second, check for file
 			DEBUG("\nSMF load Error ");
-			DEBUG(err);
+			DEBUGN(err);
 			SD_available = false;
 		}
 		else {
@@ -730,8 +742,13 @@ void tick()
 	tickPWM ();	
 	checkAnalog ();
 }
-
+void loopt () {		// test loop
+	SX_STRING ("hello ");
+	SX_NUM (404);
+	delay (1000);
+}
 void loop () {
+//	loopt ();	return;
 
 	pgm = checkSelector ();
 //	pgm = 0;
@@ -874,7 +891,7 @@ void midiFileCallback(midi_event *pev)
 	else
 		Serial.write(pev->data, pev->size);
 #endif*/
-  DEBUG("\nM T");
+/*  DEBUG("\nM T");
   DEBUG(pev->track);
   DEBUG(":  Ch ");
   DEBUG(pev->channel+1);
@@ -884,6 +901,7 @@ void midiFileCallback(midi_event *pev)
 	DEBUGX(pev->data[i]);
     DEBUG(' ');
   }
+*/
 }
 
 void sysexFileCallback(sysex_event *pev)
@@ -892,7 +910,7 @@ void sysexFileCallback(sysex_event *pev)
 // really be processed, so we just ignore it here.
 // This callback is set up in the setup() function.
 {
-  DEBUG("\nS T");
+/*  DEBUG("\nS T");
   DEBUG(pev->track);
   DEBUG(": Data ");
   for (uint8_t i=0; i<pev->size; i++)
@@ -900,6 +918,7 @@ void sysexFileCallback(sysex_event *pev)
     DEBUGX(pev->data[i]);
 	DEBUG(' ');
   }
+*/
 }
 
 void midiSilence(void)
@@ -1038,10 +1057,6 @@ void readParamFromEEPROM () {
 	if (EEPROM.read (2) != 3)	return;
 	if (EEPROM.read (3) != 4)	return;
 	
-//	digitalWrite (LEDpin, HIGH);
-//	delay (500);
-//	digitalWrite (LEDpin, LOW);
-	
 	noteOnFretDelay.min 		= mergeEEPROMbytes (4);
 	noteOnBowDelay.min 			= mergeEEPROMbytes (6);
 	noteOnMotorDelay.min 		= mergeEEPROMbytes (8);
@@ -1087,4 +1102,32 @@ void readParamFromEEPROM () {
 
 
 
+// ========================================================================
+//	DEBUG
+// ========================================================================
+#ifdef DEBUG_ENABLE
+#ifdef USE_MIDI
+char num_buf [5];
+byte sx_buf [256];
+#endif
+#endif
 
+
+void SX_STRING (char *s) {
+	int i, l;
+
+	l = strlen (s);
+		
+	sx_buf [0] = 240;
+	for (i=0; i<l; i++) {
+		sx_buf[i+1] = s[i];
+	}
+	sx_buf [i+1] = 247;
+	usbMIDI.sendSysEx (l+2, sx_buf);
+}
+
+void SX_NUM (long n) {
+	sprintf (num_buf, "%ld", n);
+	num_buf [4] = 0;	// make sure string is 0-terminated
+	SX_STRING (num_buf);
+}
