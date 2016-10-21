@@ -585,12 +585,18 @@ void OnControlChange (byte channel, byte control, byte value) {
 		case 13:	bowPressure_R.c = value;	linePWM (R_BOW, (MAX_PWM_LINE * bowPressure_R.c) / 127, 0, 0);			break;
 		case 14:	fretPressure.c = value;		linePWM (latest_note_ID, (MAX_PWM_LINE * fretPressure.c) / 127, 0, 0);	break;
 
-		case 20:	noteOnFretAttack.c = value * 10;		break;
+		case 20:	noteOnFretAttack.c = value * 10;		break;		// TODO: structure this more: note.[on|off].[fret|bow|motor].[DADSR]
 		case 21:	noteOnBowAttack.c = value * 10;			break;
 		case 22:	noteOnMotorAttack.c = value * 10;		break;
 		case 23:	noteOffFretRelease.c = value * 10;		break;
 		case 24:	noteOffBowRelease.c = value * 10;		break;
 		case 25:	noteOffMotorRelease.c = value * 10;		break;
+		case 26:	noteOnFretDecay.c = value * 10;			break;
+		case 27:	noteOnBowDecay.c = value * 10;			break;
+		case 28:	noteOnMotorDecay.c = value * 10;		break;
+		case 29:	noteOnFretSustain.c = value;			break;
+		case 30:	noteOnBowSustain.c = value;				break;
+		case 31:	noteOnMotorSustain.c = value;			break;
 		
 		// min/max for the above
 		case 40:	noteOnFretDelay.min = value * 10;		break;
@@ -629,6 +635,19 @@ void OnControlChange (byte channel, byte control, byte value) {
 		case 93:	noteOffFretRelease.max = value * 10;	break;
 		case 94:	noteOffBowRelease.max = value * 10;		break;
 		case 95:	noteOffMotorRelease.max = value * 10;	break;
+
+		case 100:	noteOnFretDecay.min = value * 10;		break;
+		case 101:	noteOnBowDecay.min = value * 10;		break;
+		case 102:	noteOnMotorDecay.min = value * 10;		break;
+		case 103:	noteOnFretSustain.min = value;			break;
+		case 104:	noteOnBowSustain.min = value;			break;
+		case 105:	noteOnMotorSustain.min = value;			break;
+		case 106:	noteOnFretDecay.max = value * 10;		break;
+		case 107:	noteOnBowDecay.max = value * 10;		break;
+		case 108:	noteOnMotorDecay.max = value * 10;		break;
+		case 109:	noteOnFretSustain.max = value;			break;
+		case 110:	noteOnBowSustain.max = value;			break;
+		case 111:	noteOnMotorSustain.max = value;			break;
 		}
 		break;
 		
