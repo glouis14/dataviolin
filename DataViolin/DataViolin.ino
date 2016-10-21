@@ -95,9 +95,11 @@ MD_MIDIFile SMF;
 #define MIN_PWM				0
 //#define MAX_PWM				2047
 #define MAX_PWM				1638	// reduce maximum to account for 15V supply (but reenable 2047 when we introduce overshoot)
+#define OVER_PWM			2047
 #define LINE_SCALE			5		// extra bits to increase resolution when calculating incs. Basically we're going from 11 bit to 16 bit
 #define MIN_PWM_LINE		(MIN_PWM << LINE_SCALE)
 #define MAX_PWM_LINE		(MAX_PWM << LINE_SCALE)
+#define OVER_PWM_LINE		(OVER_PWM << LINE_SCALE)
 
 typedef struct {
 	long	c;		// current
@@ -357,6 +359,13 @@ t_valRange	noteOffFretRelease;
 t_valRange	noteOffBowRelease;
 t_valRange	noteOffMotorRelease;
 
+t_valRange	noteOnFretDecay;
+t_valRange	noteOnBowDecay;
+t_valRange	noteOnMotorDecay;
+t_valRange	noteOnFretSustain;
+t_valRange	noteOnBowSustain;
+t_valRange	noteOnMotorSustain;
+
 
 
 bool note_playing_flag_L = false;
@@ -365,13 +374,36 @@ int last_played_note_L;
 int last_played_note_R;
 
 void PlayNote (int ID, int velocity) {
-	if ((ID != L_OPEN) && (ID != R_OPEN)) {
-		linePWM (ID, (MAX_PWM_LINE * fretPressure.c) / 127, noteOnFretAttack.c, noteOnFretDelay.c);
-		//			  16 bit         7 bit
+	long peak, sustain;
+	
+	// bring the fret down
+	if ((noteOnFretSustain.c == 127) || (noteOnFretDecay.c == 0)) {		// no sustain means only one line segment
+		sustain = (MAX_PWM_LINE * fretPressure.c) / 127;
+
+		if ((ID != L_OPEN) && (ID != R_OPEN)) {
+			linePWM (ID, sustain, noteOnFretAttack.c, noteOnFretDelay.c);
+		}		
+	}
+	else {
+		// sustain is interpreted a bit differently:
+		//		the delta to 127 is used as an overshoot for the initial attack, while sustain sets the main volume
+		//		i.e. we don't lower the sustain phase but raise the attack peak
+		long overshoot = 127 - noteOnFretSustain.c;
+		
+		sustain = (MAX_PWM_LINE *  fretPressure.c             ) / 127;
+		peak    = (MAX_PWM_LINE * (fretPressure.c + overshoot)) / 127;
+		
+		if (peak > OVER_PWM_LINE)	peak = OVER_PWM_LINE;
+		
+		if ((ID != L_OPEN) && (ID != R_OPEN)) {
+			linePWM (ID, peak, 		noteOnFretAttack.c, 	noteOnFretDelay.c);
+			linePWM (ID, sustain, 	noteOnFretDecay.c, 		noteOnFretAttack.c + noteOnFretDelay.c);
+		}		
 	}
 		
 	fretDownFlags [ID] = true;
 
+	// start the engine and engage
 	if (PWMboard [ID] == B_LEFT) {
 		last_played_note_L = ID;
 		
