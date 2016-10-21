@@ -532,68 +532,88 @@ void OnNoteOff (byte channel, byte note, byte velocity) {
 void OnControlChange (byte channel, byte control, byte value) {
 	// calling all 16 (currently) control changes separately takes 170µs to process
 //	digitalWrite (LEDpin, HIGH);
-	
-	switch (control) {
-	case 0: 	noteOnFretDelay.c = value * 10;			break;
-	case 1:		noteOnBowDelay.c = value * 10;			break;
-	case 2:		noteOnMotorDelay.c = value * 10;		break;
-	case 3:		noteOffFretDelay.c = value * 10;		break;
-	case 4:		noteOffBowDelay.c = value * 10;			break;
-	case 5:		noteOffMotorDelay.c = value * 10;		break;
-		
-	case 10:	motorSpeed_L.c = value;		linePWM (L_MOTOR, (MAX_PWM_LINE * motorSpeed_L.c) / 127, 0, 0);			break;	// don't just adjust the parameter, apply immediately
-	case 11:	motorSpeed_R.c = value;		linePWM (R_MOTOR, (MAX_PWM_LINE * motorSpeed_R.c) / 127, 0, 0);			break;
-	case 12:	bowPressure_L.c = value;	linePWM (L_BOW, (MAX_PWM_LINE * bowPressure_L.c) / 127, 0, 0);			break;
-	case 13:	bowPressure_R.c = value;	linePWM (R_BOW, (MAX_PWM_LINE * bowPressure_R.c) / 127, 0, 0);			break;
-	case 14:	fretPressure.c = value;		linePWM (latest_note_ID, (MAX_PWM_LINE * fretPressure.c) / 127, 0, 0);	break;
 
-	case 20:	noteOnFretAttack.c = value * 10;		break;
-	case 21:	noteOnBowAttack.c = value * 10;			break;
-	case 22:	noteOnMotorAttack.c = value * 10;		break;
-	case 23:	noteOffFretRelease.c = value * 10;		break;
-	case 24:	noteOffBowRelease.c = value * 10;		break;
-	case 25:	noteOffMotorRelease.c = value * 10;		break;
-		
-	// min/max for the above
-	case 40:	noteOnFretDelay.min = value * 10;		break;
-	case 41:	noteOnBowDelay.min = value * 10;		break;
-	case 42:	noteOnMotorDelay.min = value * 10;		break;
-	case 43:	noteOffFretDelay.min = value * 10;		break;
-	case 44:	noteOffBowDelay.min = value * 10;		break;
-	case 45:	noteOffMotorDelay.min = value * 10;		break;
-	case 50:	noteOnFretDelay.max = value * 10;		break;
-	case 51:	noteOnBowDelay.max = value * 10;		break;
-	case 52:	noteOnMotorDelay.max = value * 10;		break;
-	case 53:	noteOffFretDelay.max = value * 10;		break;
-	case 54:	noteOffBowDelay.max = value * 10;		break;
-	case 55:	noteOffMotorDelay.max = value * 10;		break;
-		
-	case 60:	motorSpeed_L.min = value;				break;
-	case 61:	motorSpeed_R.min = value;				break;
-	case 62:	bowPressure_L.min = value;				break;
-	case 63:	bowPressure_R.min = value;				break;
-	case 64:	fretPressure.min = value;				break;
-	case 70:	motorSpeed_L.max = value;				break;
-	case 71:	motorSpeed_R.max = value;				break;
-	case 72:	bowPressure_L.max = value;				break;
-	case 73:	bowPressure_R.max = value;				break;
-	case 74:	fretPressure.max = value;				break;
+//	DEBUGN_LN (channel);
+//	DEBUGN_LN (control);
+//	DEBUGN_LN (value);
 
-	case 80:	noteOnFretAttack.min = value * 10;		break;
-	case 81:	noteOnBowAttack.min = value * 10;		break;
-	case 82:	noteOnMotorAttack.min = value * 10;		break;
-	case 83:	noteOffFretRelease.min = value * 10;	break;
-	case 84:	noteOffBowRelease.min = value * 10;		break;
-	case 85:	noteOffMotorRelease.min = value * 10;	break;
-	case 90:	noteOnFretAttack.max = value * 10;		break;
-	case 91:	noteOnBowAttack.max = value * 10;		break;
-	case 92:	noteOnMotorAttack.max = value * 10;		break;
-	case 93:	noteOffFretRelease.max = value * 10;	break;
-	case 94:	noteOffBowRelease.max = value * 10;		break;
-	case 95:	noteOffMotorRelease.max = value * 10;	break;
+	switch (channel) {
+	case 1:		
+		switch (control) {
+		case 0: 	noteOnFretDelay.c = value * 10;			break;
+		case 1:		noteOnBowDelay.c = value * 10;			break;
+		case 2:		noteOnMotorDelay.c = value * 10;		break;
+		case 3:		noteOffFretDelay.c = value * 10;		break;
+		case 4:		noteOffBowDelay.c = value * 10;			break;
+		case 5:		noteOffMotorDelay.c = value * 10;		break;
 		
+		case 10:	motorSpeed_L.c = value;		linePWM (L_MOTOR, (MAX_PWM_LINE * motorSpeed_L.c) / 127, 0, 0);			break;	// don't just adjust the parameter, apply immediately
+		case 11:	motorSpeed_R.c = value;		linePWM (R_MOTOR, (MAX_PWM_LINE * motorSpeed_R.c) / 127, 0, 0);			break;
+		case 12:	bowPressure_L.c = value;	linePWM (L_BOW, (MAX_PWM_LINE * bowPressure_L.c) / 127, 0, 0);			break;
+		case 13:	bowPressure_R.c = value;	linePWM (R_BOW, (MAX_PWM_LINE * bowPressure_R.c) / 127, 0, 0);			break;
+		case 14:	fretPressure.c = value;		linePWM (latest_note_ID, (MAX_PWM_LINE * fretPressure.c) / 127, 0, 0);	break;
 
-	case 127:	localRandomization = value;		break;
+		case 20:	noteOnFretAttack.c = value * 10;		break;
+		case 21:	noteOnBowAttack.c = value * 10;			break;
+		case 22:	noteOnMotorAttack.c = value * 10;		break;
+		case 23:	noteOffFretRelease.c = value * 10;		break;
+		case 24:	noteOffBowRelease.c = value * 10;		break;
+		case 25:	noteOffMotorRelease.c = value * 10;		break;
+		
+		// min/max for the above
+		case 40:	noteOnFretDelay.min = value * 10;		break;
+		case 41:	noteOnBowDelay.min = value * 10;		break;
+		case 42:	noteOnMotorDelay.min = value * 10;		break;
+		case 43:	noteOffFretDelay.min = value * 10;		break;
+		case 44:	noteOffBowDelay.min = value * 10;		break;
+		case 45:	noteOffMotorDelay.min = value * 10;		break;
+		case 50:	noteOnFretDelay.max = value * 10;		break;
+		case 51:	noteOnBowDelay.max = value * 10;		break;
+		case 52:	noteOnMotorDelay.max = value * 10;		break;
+		case 53:	noteOffFretDelay.max = value * 10;		break;
+		case 54:	noteOffBowDelay.max = value * 10;		break;
+		case 55:	noteOffMotorDelay.max = value * 10;		break;
+		
+		case 60:	motorSpeed_L.min = value;				break;
+		case 61:	motorSpeed_R.min = value;				break;
+		case 62:	bowPressure_L.min = value;				break;
+		case 63:	bowPressure_R.min = value;				break;
+		case 64:	fretPressure.min = value;				break;
+		case 70:	motorSpeed_L.max = value;				break;
+		case 71:	motorSpeed_R.max = value;				break;
+		case 72:	bowPressure_L.max = value;				break;
+		case 73:	bowPressure_R.max = value;				break;
+		case 74:	fretPressure.max = value;				break;
+
+		case 80:	noteOnFretAttack.min = value * 10;		break;
+		case 81:	noteOnBowAttack.min = value * 10;		break;
+		case 82:	noteOnMotorAttack.min = value * 10;		break;
+		case 83:	noteOffFretRelease.min = value * 10;	break;
+		case 84:	noteOffBowRelease.min = value * 10;		break;
+		case 85:	noteOffMotorRelease.min = value * 10;	break;
+		case 90:	noteOnFretAttack.max = value * 10;		break;
+		case 91:	noteOnBowAttack.max = value * 10;		break;
+		case 92:	noteOnMotorAttack.max = value * 10;		break;
+		case 93:	noteOffFretRelease.max = value * 10;	break;
+		case 94:	noteOffBowRelease.max = value * 10;		break;
+		case 95:	noteOffMotorRelease.max = value * 10;	break;
+		}
+		break;
+		
+	case 2:
+		if ((control >= L_FRET_1) && (control <= L_FRET_12)) {
+			fretBowCompensation [control] = value;
+		}
+		if ((control >= R_FRET_1) && (control <= R_FRET_12)) {
+			fretBowCompensation [control] = value;
+		}
+		break;
+		
+	case 16:
+		switch (control) {
+		case 127: 	localRandomization = value;		break;
+		}
+		break;
 	}
 	
 //	digitalWrite (LEDpin, LOW);	
