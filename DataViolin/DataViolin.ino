@@ -689,10 +689,10 @@ void initArticulation () {
 	initStruct (&noteOffMotorRelease, 0);
 	
 	// could set all to 127, but this better illustrates which values matter
-	for (i=L_FRET_1; i<=L_FRET_12; i++) {
+	for (i=L_OPEN; i<=L_FRET_12; i++) {
 		fretBowCompensation [i] = 63;	// not 127 - we want to be able to increase!
 	}
-	for (i=R_FRET_1; i<=R_FRET_12; i++) {
+	for (i=R_OPEN; i<=R_FRET_12; i++) {
 		fretBowCompensation [i] = 63;
 	}
 }
