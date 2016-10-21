@@ -1,5 +1,6 @@
 /*
-	DataViolin - a project by Jon Rose
+	DataViolin - a project by Jon Rose 
+				 with hardware by Martin Riches
 	
 	to do:
 	- more hierarchical structures for all the parameters
