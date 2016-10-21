@@ -690,7 +690,7 @@ void initArticulation () {
 	
 	// could set all to 127, but this better illustrates which values matter
 	for (i=L_OPEN; i<=L_FRET_12; i++) {
-		fretBowCompensation [i] = 63;	// not 127 - we want to be able to increase!
+		fretBowCompensation [i] = 63;	// not 127 - we want to be able to increase! 
 	}
 	for (i=R_OPEN; i<=R_FRET_12; i++) {
 		fretBowCompensation [i] = 63;
