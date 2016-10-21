@@ -1003,61 +1003,68 @@ void playMIDIfile (void)
 // ========================================================================
 
 void writeParamToEEPROM () {
-	unsigned char c;
-	
-//	digitalWrite (LEDpin, HIGH);
-//	delay (1000);
-//	digitalWrite (LEDpin, LOW);
+	int i;
 	
 	EEPROM.write (0, 1);
 	EEPROM.write (1, 2);
 	EEPROM.write (2, 3);
 	EEPROM.write (3, 4);
+	                                                     
+	splitEEPROMbytes ( 4, noteOnFretDelay.min);	 
+	splitEEPROMbytes ( 6, noteOnBowDelay.min);		 
+	splitEEPROMbytes ( 8, noteOnMotorDelay.min);	 
+	splitEEPROMbytes (10, noteOffFretDelay.min);	 
+	splitEEPROMbytes (12, noteOffBowDelay.min);	 
+	splitEEPROMbytes (14, noteOffMotorDelay.min);	 
+	                                                     
+	splitEEPROMbytes (16, noteOnFretDelay.max);	 
+	splitEEPROMbytes (18, noteOnBowDelay.max);		 
+	splitEEPROMbytes (20, noteOnMotorDelay.max);	 
+	splitEEPROMbytes (22, noteOffFretDelay.max);	 
+	splitEEPROMbytes (24, noteOffBowDelay.max);	 
+	splitEEPROMbytes (26, noteOffMotorDelay.max);	 
+	                                                     
+	                                                     
+	splitEEPROMbytes (28, motorSpeed_L.min);		 
+	splitEEPROMbytes (30, motorSpeed_R.min);		 
+	splitEEPROMbytes (32, bowPressure_L.min);		 
+	splitEEPROMbytes (34, bowPressure_R.min);		 
+	splitEEPROMbytes (36, fretPressure.min);		 
+                                                         
+	splitEEPROMbytes (38, motorSpeed_L.max);		 
+	splitEEPROMbytes (40, motorSpeed_R.max);		 
+	splitEEPROMbytes (42, bowPressure_L.max);		 
+	splitEEPROMbytes (44, bowPressure_R.max);		 
+	splitEEPROMbytes (46, fretPressure.max);		 
+                                                         
+                                                         
+	splitEEPROMbytes (48, noteOnFretAttack.min);	 
+	splitEEPROMbytes (50, noteOnBowAttack.min);	 
+	splitEEPROMbytes (52, noteOnMotorAttack.min);	 
+	splitEEPROMbytes (54, noteOffFretRelease.min);	 
+	splitEEPROMbytes (56, noteOffBowRelease.min);	 
+	splitEEPROMbytes (58, noteOffMotorRelease.min); 
+	                                                     
+	splitEEPROMbytes (60, noteOnFretAttack.max);	 
+	splitEEPROMbytes (62, noteOnBowAttack.max);	 
+	splitEEPROMbytes (64, noteOnMotorAttack.max);	 
+	splitEEPROMbytes (66, noteOffFretRelease.max);	 
+	splitEEPROMbytes (68, noteOffBowRelease.max);	 
+	splitEEPROMbytes (70, noteOffMotorRelease.max); 
 	
-	EEPROM.write ( 4, noteOnFretDelay.min >> 8);		EEPROM.write ( 5, noteOnFretDelay.min & 0xFF);
-	EEPROM.write ( 6, noteOnBowDelay.min >> 8);			EEPROM.write ( 7, noteOnBowDelay.min & 0xFF);
-	EEPROM.write ( 8, noteOnMotorDelay.min >> 8);		EEPROM.write ( 9, noteOnMotorDelay.min & 0xFF);
-	EEPROM.write (10, noteOffFretDelay.min >> 8);		EEPROM.write (11, noteOffFretDelay.min & 0xFF);
-	EEPROM.write (12, noteOffBowDelay.min >> 8);		EEPROM.write (13, noteOffBowDelay.min & 0xFF);
-	EEPROM.write (14, noteOffMotorDelay.min >> 8);		EEPROM.write (15, noteOffMotorDelay.min & 0xFF);
 	
-	EEPROM.write (16, noteOnFretDelay.max >> 8);		EEPROM.write (17, noteOnFretDelay.max & 0xFF);  
-	EEPROM.write (18, noteOnBowDelay.max >> 8);			EEPROM.write (19, noteOnBowDelay.max & 0xFF);   
-	EEPROM.write (20, noteOnMotorDelay.max >> 8);		EEPROM.write (21, noteOnMotorDelay.max & 0xFF); 
-	EEPROM.write (22, noteOffFretDelay.max >> 8);		EEPROM.write (23, noteOffFretDelay.max & 0xFF); 
-	EEPROM.write (24, noteOffBowDelay.max >> 8);		EEPROM.write (25, noteOffBowDelay.max & 0xFF);  
-	EEPROM.write (26, noteOffMotorDelay.max >> 8);		EEPROM.write (27, noteOffMotorDelay.max & 0xFF);
+	for (i=0; i<NUM_CHAN; i++) {	// here we store all, even though not all contain meaningful data
+		splitEEPROMbytes (72 + i*2, fretBowCompensation [i]);		
+	}
+	// NUM_CHAN is 28, so the next address would be 72 + 28* 2 = 128
 	
 	
-	EEPROM.write (28, motorSpeed_L.min >> 8);			EEPROM.write (29, motorSpeed_L.min & 0xFF);
-	EEPROM.write (30, motorSpeed_R.min >> 8);			EEPROM.write (31, motorSpeed_R.min & 0xFF);
-	EEPROM.write (32, bowPressure_L.min >> 8);			EEPROM.write (33, bowPressure_L.min & 0xFF);
-	EEPROM.write (34, bowPressure_R.min >> 8);			EEPROM.write (35, bowPressure_R.min & 0xFF);
-	EEPROM.write (36, fretPressure.min >> 8);			EEPROM.write (37, fretPressure.min & 0xFF);
-
-	EEPROM.write (38, motorSpeed_L.max >> 8);			EEPROM.write (39, motorSpeed_L.max & 0xFF);
-	EEPROM.write (40, motorSpeed_R.max >> 8);			EEPROM.write (41, motorSpeed_R.max & 0xFF);
-	EEPROM.write (42, bowPressure_L.max >> 8);			EEPROM.write (43, bowPressure_L.max & 0xFF);
-	EEPROM.write (44, bowPressure_R.max >> 8);			EEPROM.write (45, bowPressure_R.max & 0xFF);
-	EEPROM.write (46, fretPressure.max >> 8);			EEPROM.write (47, fretPressure.max & 0xFF);
-
-
-	EEPROM.write (48, noteOnFretAttack.min >> 8);		EEPROM.write (49, noteOnFretAttack.min & 0xFF);
-	EEPROM.write (50, noteOnBowAttack.min >> 8);		EEPROM.write (51, noteOnBowAttack.min & 0xFF);
-	EEPROM.write (52, noteOnMotorAttack.min >> 8);		EEPROM.write (53, noteOnMotorAttack.min & 0xFF);
-	EEPROM.write (54, noteOffFretRelease.min >> 8);		EEPROM.write (55, noteOffFretRelease.min & 0xFF);
-	EEPROM.write (56, noteOffBowRelease.min >> 8);		EEPROM.write (57, noteOffBowRelease.min & 0xFF);
-	EEPROM.write (58, noteOffMotorRelease.min >> 8);	EEPROM.write (59, noteOffMotorRelease.min & 0xFF);
-	
-	EEPROM.write (60, noteOnFretAttack.max >> 8);		EEPROM.write (61, noteOnFretAttack.max & 0xFF);
-	EEPROM.write (62, noteOnBowAttack.max >> 8);		EEPROM.write (63, noteOnBowAttack.max & 0xFF);
-	EEPROM.write (64, noteOnMotorAttack.max >> 8);		EEPROM.write (65, noteOnMotorAttack.max & 0xFF);
-	EEPROM.write (66, noteOffFretRelease.max >> 8);		EEPROM.write (67, noteOffFretRelease.max & 0xFF);
-	EEPROM.write (68, noteOffBowRelease.max >> 8);		EEPROM.write (69, noteOffBowRelease.max & 0xFF);
-	EEPROM.write (70, noteOffMotorRelease.max >> 8);	EEPROM.write (71, noteOffMotorRelease.max & 0xFF);
 }
 
-
+void splitEEPROMbytes (int i, long l) {
+	EEPROM.write (i,   l >> 8);	
+	EEPROM.write (i+1, l & 0xFF);
+}
 long mergeEEPROMbytes (int i) {
 	return ((((long) EEPROM.read (i)) << 8) + (long) EEPROM.read (i+1));
 }
